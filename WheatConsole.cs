@@ -3,6 +3,7 @@
 using ANSIConsole;
 using MathEx;
 using System.Globalization;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using SystemEx;
@@ -29,22 +30,19 @@ public partial class WheatConsole : IDisposable
 	static bool NeedIndent = true;
 	static int LineWidth = 65;
 
-	public static aabb2i intital_window;
-	public aabb2i window = intital_window;
+	public aabb2i screen => aabb2i.wh(vec2i.xy(Console.WindowWidth, Console.WindowHeight));
+	public aabb2i window;
 	public Cursor cursor;
+	public Cursor readCursor;
 
-
-	static WheatConsole()
-	{
-		intital_window = aabb2i.xywh(
-			vec2i.zero, vec2i.xy(Console.WindowWidth, Console.WindowHeight));
-	}
 
 	[Dispose] DisposableValue ansiMode = new DisposableValue();
 
+
 	public WheatConsole()
-	{
+	{ 
 		ansiMode._ = new ANSIInitializer();
+		window = screen;
 		cursor = (Cursor)Console.GetCursorPosition();
 	}
 
@@ -83,9 +81,6 @@ public partial class WheatConsole : IDisposable
 
 		internal Cursor Set()
 			=> this.Also(_ => Console.SetCursorPosition(x.Clamp0(0), y.Clamp(0, Console.BufferHeight - 1)));
-
-		internal IDisposable Lock(Action<Cursor> a)
-			=> DisposableLock.Lock(this, c => a(c));
 
 		internal Cursor Move(int dx) => Set(x + dx, y);
 		internal Cursor Move((int x, int y) d) => Set(x + d.x, y + d.y);
@@ -205,6 +200,19 @@ public partial class WheatConsole : IDisposable
 		return false;
 	}
 
+	internal void ReadRaw(out char c)
+	{
+		
+#if false
+		using (cursor.Lock(
+			c => Console.SetCursorPosition(readCursor.x, readCursor.y)
+			, c => Console.SetCursorPosition(c.x, c.y)))
+		{
+			Console.ForegroundColor
+		}
+#endif
+	}
+
 	public void Indent()
 	{
 		if (NeedIndent)
@@ -261,25 +269,31 @@ public partial class WheatConsole : IDisposable
 	}
 
 	internal void WriteRaw(ANSIString s) => WriteRaw(s.ToString());
+	internal void WriteRaw(char c)
+	{
+		var d = Direction switch {
+			WriteDirection.Right => (1, 0),
+			WriteDirection.Bottom => (0, 1),
+			WriteDirection.Left => (-1, 0),
+			WriteDirection.Top => (0, -1),
+		};
+
+		Console.Write(c);
+		cursor = cursor.Move(d);
+		readCursor = cursor;
+	}
 	internal void WriteRaw(string s)
 	{
 		switch (Direction)
 		{
-			case WriteDirection.Original:
-				Console.Write(s);
-				cursor = (Cursor)Console.GetCursorPosition();
-				break;
+			//case WriteDirection.Original:
+			//	Console.Write(s);
+			//	cursor = (Cursor)Console.GetCursorPosition();
+			//	break;
 			default:
-				var d = Direction switch {
-					WriteDirection.Right => (1, 0),
-					WriteDirection.Bottom => (0, 1),
-					WriteDirection.Left => (-1, 0),
-					WriteDirection.Top => (0, -1),
-				};
 				foreach (var c in s)
 				{
-					Console.Write(c);
-					cursor = cursor.Move(d);
+					WriteRaw(c);
 				}
 				break;
 		}
@@ -382,8 +396,55 @@ public partial class WheatConsole : IDisposable
 				});
 	}
 
+	IDisposable<WriteDirection> LockDirection(WriteDirection d)
+		=> Direction.Also(_ => Direction = d).Lock(_ => Direction = _);
+	
+
+
+	void DrawVerticalLine(vec2i a, vec2i b)
+	{
+		var lineCh = BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single });
+		vec2i.order(ref a, ref b);
+		cursor = cursor.Set(a);
+
+		using (LockDirection(WriteDirection.Bottom))
+		{
+			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
+			WriteRaw(new string(lineCh, (b.y - a.y - 2).Clamp0()));
+		}
+	}
+
+	void DrawBorder(aabb2i rect)
+	{
+		cursor = cursor.Set(rect.a);
+
+		using (LockDirection(WriteDirection.Right))
+		{
+			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), position.width - 2));
+		}
+
+		using (LockDirection(WriteDirection.Bottom))
+		{
+			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
+		}
+		using (LockDirection(WriteDirection.Left))
+		{
+			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), position.width - 2));
+		}
+		using (LockDirection(WriteDirection.Top))
+		{
+			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
+		}
+	}
+
 	public IDisposable Border(aabb2i padding)
-		=> Window(new(window.a + padding.a, window.b - padding.b));
+		=> Window(new(window.a + padding.a, window.b - padding.b)).Also(_ => { 
+
+		});
 
 	public IDisposable Panel(aabb2i position)
 		=> Window(position).Also(_ => {
@@ -392,31 +453,31 @@ public partial class WheatConsole : IDisposable
 				cursor = cursor.Set(position.a);
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Right), _ => Direction = _))
 				{
-					WriteRaw("\x250C"); // tl
-					WriteRaw(new string('\x2500', position.width - 2));
+					WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }));
+					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), position.width - 2));
 				}
 
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Bottom), _ => Direction = _))
 				{
-					WriteRaw("\x2510"); // tr
-					WriteRaw(new string('\x2502', position.height - 2));
+					WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
+					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
 				}
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Left), _ => Direction = _))
 				{
-					WriteRaw("\x2518"); // br
-					WriteRaw(new string('\x2500', position.width - 2));
+					WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
+					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), position.width - 2));
 				}
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Top), _ => Direction = _))
 				{
-					WriteRaw("\x2514"); // bl
-					WriteRaw(new string('\x2502', position.height - 2));
+					WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }));
+					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
 				}
 			}
 		});
 
 	public IDisposable Image(WheatImage image) => Image(cursor, image);
 	public IDisposable Image(vec2i position, WheatImage image)
-		=> Window(position.hw(image.size)).Also(_ => {
+		=> Window(position.wh(image.size)).Also(_ => {
 			using (DisposableLock.Lock(() => clearmode.Also(_ => clearmode = false), _ => clearmode = _))
 			{
 				foreach (var l in image.lines)
@@ -452,5 +513,155 @@ public partial class WheatConsole : IDisposable
 
 			EndLine();
 		});
+	}
+}
+
+public class BoxDrawing
+{
+	class CellAttribute : Attribute
+	{
+		public CellLine top = CellLine.None;
+		public CellLine right = CellLine.None;
+		public CellLine bottom = CellLine.None;
+		public CellLine left = CellLine.None;
+
+		public Cell cell => new Cell { top= top, right = right, bottom = bottom, left = left };
+	}
+
+
+	[Flags]
+	public enum CellLine
+	{
+		None = 0x00,
+		Single = 0x01,
+		Double = 0x02,
+		Bold = 0x04
+	}
+
+	public struct Cell
+	{
+		public CellLine top = CellLine.None;
+		public CellLine right = CellLine.None;
+		public CellLine bottom = CellLine.None;
+		public CellLine left = CellLine.None;
+
+		public Cell()
+		{
+		}
+
+		public static implicit operator int(Cell c)
+			=> ((int)c.top << 6)
+				| ((int)c.right << 4)
+				| ((int)c.bottom << 2)
+				| ((int)c.left);
+	}
+
+	public const char ErrorChar = '\x0000';
+
+	[Cell(right = CellLine.Single, left = CellLine.Single)]
+	public const char HorizontalLine = '\x2500';
+	[Cell(right = CellLine.Single | CellLine.Bold, left = CellLine.Single | CellLine.Bold)]
+	public const char HorizontalLineBold = '\x2501';
+	[Cell(top = CellLine.Single, bottom = CellLine.Single)]
+	public const char VerticalLine = '\x2502';
+	[Cell(top = CellLine.Single | CellLine.Bold, bottom = CellLine.Single | CellLine.Bold)]
+	public const char VerticalLineBold = '\x2503';
+	public const char HorizontalDash2Line = '\x254C';
+	public const char HorizontalDash2LineBold = '\x254D';
+	public const char VerticalDash2Line = '\x254E';
+	public const char VerticalDash2LineBold = '\x254F';
+	public const char HorizontalDash3Line = '\x2504';
+	public const char HorizontalDash3LineBold = '\x2505';
+	public const char VerticalDash3Line = '\x2506';
+	public const char VerticalDash3LineBold = '\x2507';
+	public const char HorizontalDash4Line = '\x2508';
+	public const char HorizontalDash4LineBold = '\x2509';
+	public const char VerticalDash4Line = '\x250A';
+	public const char VerticalDash4LineBold = '\x250B';
+	[Cell(right = CellLine.Double, left = CellLine.Double)]
+	public const char HorizontalDoubleLine = '\x2550';
+	[Cell(top = CellLine.Double, bottom = CellLine.Double)]
+	public const char VerticalDoubleLine = '\x2551';
+
+	[Cell(bottom = CellLine.Single, right = CellLine.Single)]
+	public const char TopLeftCornerLineNN = '\x250C';
+	[Cell(bottom = CellLine.Single, right = CellLine.Single | CellLine.Bold)]
+	public const char TopLeftCornerLineNB = '\x250D';
+	[Cell(bottom = CellLine.Single | CellLine.Bold, right = CellLine.Single)]
+	public const char TopLeftCornerLineBN = '\x250E';
+	[Cell(bottom = CellLine.Single | CellLine.Bold, right = CellLine.Single | CellLine.Bold)]
+	public const char TopLeftCornerLineBB = '\x250F';
+	[Cell(bottom = CellLine.Single, left = CellLine.Single)]
+	public const char TopRightCornerLineNN = '\x2510';
+	[Cell(bottom = CellLine.Single, left = CellLine.Single | CellLine.Bold)]
+	public const char TopRightCornerLineNB = '\x2511';
+	[Cell(bottom = CellLine.Single | CellLine.Bold, left = CellLine.Single)]
+	public const char TopRightCornerLineBN = '\x2512';
+	[Cell(bottom = CellLine.Single | CellLine.Bold, left = CellLine.Single | CellLine.Bold)]
+	public const char TopRightCornerLineBB = '\x2513';
+	[Cell(top = CellLine.Single, right = CellLine.Single)]
+	public const char BottomLeftCornerLineNN = '\x2514';
+	[Cell(top = CellLine.Single, right = CellLine.Single | CellLine.Bold)]
+	public const char BottomLeftCornerLineNB = '\x2515';
+	[Cell(top = CellLine.Single | CellLine.Bold, right = CellLine.Single)]
+	public const char BottomLeftCornerLineBN = '\x2516';
+	[Cell(top = CellLine.Single | CellLine.Bold, right = CellLine.Single | CellLine.Bold)]
+	public const char BottomLeftCornerLineBB = '\x2517';
+	[Cell(top = CellLine.Single, left = CellLine.Single)]
+	public const char BottomRightCornerLineNN = '\x2518';
+	[Cell(top = CellLine.Single, left = CellLine.Single | CellLine.Bold)]
+	public const char BottomRightCornerLineNB = '\x2519';
+	[Cell(top = CellLine.Single | CellLine.Bold, left = CellLine.Single)]
+	public const char BottomRightCornerLineBN = '\x251A';
+	[Cell(top = CellLine.Single | CellLine.Bold, left = CellLine.Single | CellLine.Bold)]
+	public const char BottomRightCornerLineBB = '\x251B';
+
+	[Cell(bottom = CellLine.Single, right = CellLine.Double)]
+	public const char TopLeftCornerLineSD = '\x2502';
+	[Cell(bottom = CellLine.Double, right = CellLine.Single)]
+	public const char TopLeftCornerLineDS = '\x2503';
+	[Cell(bottom = CellLine.Double, right = CellLine.Double)]
+	public const char TopLeftCornerLineDD = '\x2504';
+	[Cell(bottom = CellLine.Single, left = CellLine.Double)]
+	public const char TopRightCornerLineSD = '\x2505';
+	[Cell(bottom = CellLine.Double, left = CellLine.Single)]
+	public const char TopRightCornerLineDS = '\x2506';
+	[Cell(bottom = CellLine.Double, left = CellLine.Double)]
+	public const char TopRightCornerLineDD = '\x2507';
+	[Cell(top = CellLine.Single, right = CellLine.Double)]
+	public const char BottomLeftCornerLineSD = '\x2508';
+	[Cell(top = CellLine.Double, right = CellLine.Single)]
+	public const char BottomLeftCornerLineDS = '\x2509';
+	[Cell(top = CellLine.Double, right = CellLine.Double)]
+	public const char BottomLeftCornerLineDD = '\x250A';
+	[Cell(top = CellLine.Single, left = CellLine.Double)]
+	public const char BottomRightCornerLineSD = '\x250B';
+	[Cell(top = CellLine.Double, left = CellLine.Single)]
+	public const char BottomRightCornerLineDS = '\x250C';
+	[Cell(top = CellLine.Double, left = CellLine.Double)]
+	public const char BottomRightCornerLineDD = '\x250D';
+
+
+	private static Dictionary<Cell, char> CellToChars;
+	private static Dictionary<char, Cell> CharToCells;
+
+	static BoxDrawing()
+	{
+		var fields = typeof(BoxDrawing)
+			.GetFieldsAndAttributes<CellAttribute>(BindingFlags.Public | BindingFlags.Static)
+			.ToList();
+
+		CellToChars = fields
+			.ToDictionary(fa => fa.Item2.cell, fa => (char)fa.Item1.GetValue(null));
+		CharToCells = fields
+			.ToDictionary(fa => (char)fa.Item1.GetValue(null), fa => fa.Item2.cell);
+	}
+
+	public static char GetChar(Cell cell)
+	{
+		if (CellToChars.TryGetValue(cell, out char c))
+			return c;
+
+		return ErrorChar;
 	}
 }
