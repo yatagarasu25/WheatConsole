@@ -1,5 +1,4 @@
-﻿using MathEx;
-using static Wheat.NativeFunctions;
+﻿using static Wheat.NativeFunctions;
 
 namespace Wheat;
 
@@ -27,11 +26,26 @@ internal class WindowEvent
 
 internal class WheatConsoleInput
 {
-	static IntPtr handleIn;
+	static public IntPtr handleIn;
 
 	static WheatConsoleInput()
 	{
 		handleIn = GetStdHandle(STD_INPUT_HANDLE);
+
+		if (!GetConsoleMode(handleIn, out uint originalConsoleMode))
+		{
+			Console.WriteLine("failed to get output console mode");
+			return;
+		}
+
+		var consoleMode = (originalConsoleMode 
+			| ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT)
+			& ~ENABLE_QUICK_EDIT_MODE;
+		if (!SetConsoleMode(handleIn, consoleMode))
+		{
+			Console.WriteLine("failed to set output console mode, error code: {GetLastError()}");
+			return;
+		}
 	}
 
 	static bool Run = false;

@@ -1,5 +1,4 @@
-﻿using MathEx;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace Wheat;
 
@@ -118,6 +117,8 @@ public static class NativeFunctions
 	[DllImport("kernel32.dll")]
 	public static extern IntPtr GetStdHandle(uint nStdHandle);
 
+	[DllImport("kernel32.dll")]
+	public static extern uint GetLastError();
 
 	public const uint ENABLE_MOUSE_INPUT = 0x0010,
 		ENABLE_QUICK_EDIT_MODE = 0x0040,
@@ -126,7 +127,7 @@ public static class NativeFunctions
 		ENABLE_WINDOW_INPUT = 0x0008; //more
 
 	[DllImportAttribute("kernel32.dll")]
-	public static extern bool GetConsoleMode(IntPtr hConsoleInput, ref uint lpMode);
+	public static extern bool GetConsoleMode(IntPtr hConsoleInput, out uint lpMode);
 
 	[DllImportAttribute("kernel32.dll")]
 	public static extern bool SetConsoleMode(IntPtr hConsoleInput, uint dwMode);
@@ -139,8 +140,8 @@ public static class NativeFunctions
 	public static extern bool WriteConsoleInput(IntPtr hConsoleInput, INPUT_RECORD[] lpBuffer, uint nLength, ref uint lpNumberOfEventsWritten);
 
 	[DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
-	[return: MarshalAs(UnmanagedType.Bool)] //   ̲┌──────────────────^
-	static extern bool ReadConsoleOutputCharacterA(
+	[return: MarshalAs(UnmanagedType.Bool)] //          ̲┌──────────^
+	public static extern bool ReadConsoleOutputCharacterA(
 		IntPtr hStdout,   // result of 'GetStdHandle(-11)'
 		out byte ch,      // A̲N̲S̲I̲ character result
 		uint c_in,        // (set to '1')
@@ -148,8 +149,8 @@ public static class NativeFunctions
 		out uint c_out);  // (unwanted, discard)
 
 	[DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
-	[return: MarshalAs(UnmanagedType.Bool)] //   ̲┌───────────────────^
-	static extern bool ReadConsoleOutputCharacterW(
+	[return: MarshalAs(UnmanagedType.Bool)] //          ̲┌────────────^
+	public static extern bool ReadConsoleOutputCharacterW(
 		IntPtr hStdout,   // result of 'GetStdHandle(-11)'
 		out Char ch,      // U̲n̲i̲c̲o̲d̲e̲ character result
 		uint c_in,        // (set to '1')

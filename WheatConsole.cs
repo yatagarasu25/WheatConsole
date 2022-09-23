@@ -1,12 +1,10 @@
 ﻿namespace Wheat;
 
-using ANSIConsole;
-using MathEx;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using SystemEx;
+using static Wheat.NativeFunctions;
 
 public partial class WheatConsole : IDisposable
 {
@@ -35,6 +33,7 @@ public partial class WheatConsole : IDisposable
 	public Cursor cursor;
 	public Cursor readCursor;
 
+	protected WheatConsoleBuffer buffer = new WheatConsoleBuffer();
 
 	[Dispose] DisposableValue ansiMode = new DisposableValue();
 
@@ -44,6 +43,7 @@ public partial class WheatConsole : IDisposable
 		ansiMode._ = new ANSIInitializer();
 		window = screen;
 		cursor = (Cursor)Console.GetCursorPosition();
+		buffer = new WheatConsoleBuffer(window.size);
 	}
 
 	public void Dispose()
@@ -75,12 +75,13 @@ public partial class WheatConsole : IDisposable
 		public static explicit operator Cursor(vec2i v) => new(v.x, v.y);
 		public static explicit operator Cursor((int Left, int Top) v) => new(v.Left, v.Top);
 		public static implicit operator vec2i(Cursor c) => vec2i.xy(c.x, c.y);
+		public static implicit operator COORD(Cursor v) => new COORD { X = (short)v.x, Y = (short)v.y };
 
 		internal Cursor Set(int _x, int _y) => new Cursor(_x, _y).Also(_ => _.Set());
 		internal Cursor Set(vec2i a) => new Cursor(a.x, a.y).Also(_ => _.Set());
 
 		internal Cursor Set()
-			=> this.Also(_ => Console.SetCursorPosition(x.Clamp0(0), y.Clamp(0, Console.BufferHeight - 1)));
+			=> this.Also(_ => Console.SetCursorPosition(x.Clamp(0, Console.BufferWidth - 1), y.Clamp(0, Console.BufferHeight - 1)));
 
 		internal Cursor Move(int dx) => Set(x + dx, y);
 		internal Cursor Move((int x, int y) d) => Set(x + d.x, y + d.y);
@@ -202,7 +203,7 @@ public partial class WheatConsole : IDisposable
 
 	internal void ReadRaw(out char c)
 	{
-		
+		c = buffer[readCursor].c;
 #if false
 		using (cursor.Lock(
 			c => Console.SetCursorPosition(readCursor.x, readCursor.y)
@@ -231,6 +232,9 @@ public partial class WheatConsole : IDisposable
 
 		int OutputLength = v.Length;
 
+		WriteRaw(v);
+
+#if false
 		var commands = new[] { "[", "]", "c.." };
 		var pattern = commands.Select((i) => i switch {
 			"]" or "[" => $"\\{i}",
@@ -262,13 +266,15 @@ public partial class WheatConsole : IDisposable
 			}
 		}
 
+#endif
 		Spaces += PendingSpaces;
 		PendingSpaces = 0;
 
 		return OutputLength;
 	}
 
-	internal void WriteRaw(ANSIString s) => WriteRaw(s.ToString());
+	public void Write(ANSIString s) => WriteRaw(s.ToString());
+
 	internal void WriteRaw(char c)
 	{
 		var d = Direction switch {
@@ -279,24 +285,32 @@ public partial class WheatConsole : IDisposable
 		};
 
 		Console.Write(c);
+		buffer[cursor] = new ANSICharacter(c);
 		cursor = cursor.Move(d);
 		readCursor = cursor;
 	}
 	internal void WriteRaw(string s)
 	{
-		switch (Direction)
+		var reg = $"{Regex.Escape(ANSI.CSI)}[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]"
+			+ $"|{Regex.Escape(ANSI.ESC)}[\x40-\x5F]";
+		var r = new Regex(reg, RegexOptions.Compiled);
+
+		var t = s.tokenize();
+		while (t.find_any(ANSI.ESC[0]))
 		{
-			//case WriteDirection.Original:
-			//	Console.Write(s);
-			//	cursor = (Cursor)Console.GetCursorPosition();
-			//	break;
-			default:
-				foreach (var c in s)
-				{
-					WriteRaw(c);
-				}
-				break;
+			var str = t.token;
+			foreach (var c in str)
+				WriteRaw(c);
+
+			var m = r.Match(t.line_end.ToString());
+			if (m.Success)
+			{
+				t.step(m.Value.Length);
+			}
 		}
+
+		foreach (var c in t.token)
+			WriteRaw(c);
 	}
 
 	internal void WriteLineRaw(string s = "")
@@ -421,23 +435,23 @@ public partial class WheatConsole : IDisposable
 		using (LockDirection(WriteDirection.Right))
 		{
 			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }));
-			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), position.width - 2));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), rect.width - 2));
 		}
 
 		using (LockDirection(WriteDirection.Bottom))
 		{
 			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
-			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), rect.height - 2));
 		}
 		using (LockDirection(WriteDirection.Left))
 		{
 			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
-			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), position.width - 2));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { left = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }), rect.width - 2));
 		}
 		using (LockDirection(WriteDirection.Top))
 		{
 			WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }));
-			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
+			WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), rect.height - 2));
 		}
 	}
 
@@ -460,7 +474,7 @@ public partial class WheatConsole : IDisposable
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Bottom), _ => Direction = _))
 				{
 					WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { bottom = BoxDrawing.CellLine.Single, left = BoxDrawing.CellLine.Single }));
-					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
+					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.height - 2));
 				}
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Left), _ => Direction = _))
 				{
@@ -470,7 +484,7 @@ public partial class WheatConsole : IDisposable
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Top), _ => Direction = _))
 				{
 					WriteRaw(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, right = BoxDrawing.CellLine.Single }));
-					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.width - 2));
+					WriteRaw(new string(BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single }), position.height - 2));
 				}
 			}
 		});
@@ -617,29 +631,29 @@ public class BoxDrawing
 	public const char BottomRightCornerLineBB = '\x251B';
 
 	[Cell(bottom = CellLine.Single, right = CellLine.Double)]
-	public const char TopLeftCornerLineSD = '\x2502';
+	public const char TopLeftCornerLineSD = '\x2552';
 	[Cell(bottom = CellLine.Double, right = CellLine.Single)]
-	public const char TopLeftCornerLineDS = '\x2503';
+	public const char TopLeftCornerLineDS = '\x2553';
 	[Cell(bottom = CellLine.Double, right = CellLine.Double)]
-	public const char TopLeftCornerLineDD = '\x2504';
+	public const char TopLeftCornerLineDD = '\x2554';
 	[Cell(bottom = CellLine.Single, left = CellLine.Double)]
-	public const char TopRightCornerLineSD = '\x2505';
+	public const char TopRightCornerLineSD = '\x2555';
 	[Cell(bottom = CellLine.Double, left = CellLine.Single)]
-	public const char TopRightCornerLineDS = '\x2506';
+	public const char TopRightCornerLineDS = '\x2556';
 	[Cell(bottom = CellLine.Double, left = CellLine.Double)]
-	public const char TopRightCornerLineDD = '\x2507';
+	public const char TopRightCornerLineDD = '\x2557';
 	[Cell(top = CellLine.Single, right = CellLine.Double)]
-	public const char BottomLeftCornerLineSD = '\x2508';
+	public const char BottomLeftCornerLineSD = '\x2558';
 	[Cell(top = CellLine.Double, right = CellLine.Single)]
-	public const char BottomLeftCornerLineDS = '\x2509';
+	public const char BottomLeftCornerLineDS = '\x2559';
 	[Cell(top = CellLine.Double, right = CellLine.Double)]
-	public const char BottomLeftCornerLineDD = '\x250A';
+	public const char BottomLeftCornerLineDD = '\x255A';
 	[Cell(top = CellLine.Single, left = CellLine.Double)]
-	public const char BottomRightCornerLineSD = '\x250B';
+	public const char BottomRightCornerLineSD = '\x255B';
 	[Cell(top = CellLine.Double, left = CellLine.Single)]
-	public const char BottomRightCornerLineDS = '\x250C';
+	public const char BottomRightCornerLineDS = '\x255C';
 	[Cell(top = CellLine.Double, left = CellLine.Double)]
-	public const char BottomRightCornerLineDD = '\x250D';
+	public const char BottomRightCornerLineDD = '\x255D';
 
 
 	private static Dictionary<Cell, char> CellToChars;
