@@ -1,5 +1,6 @@
 ﻿namespace Wheat;
 
+using System.Drawing;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
@@ -42,7 +43,7 @@ public partial class WheatConsole : IDisposable
 	{ 
 		ansiMode._ = new ANSIInitializer();
 		window = screen;
-		cursor = (Cursor)Console.GetCursorPosition();
+		SetCursor(Console.GetCursorPosition());
 		buffer = new WheatConsoleBuffer(window.size);
 	}
 
@@ -51,6 +52,12 @@ public partial class WheatConsole : IDisposable
 		this.DisposeFields();
 	}
 
+
+	public void Resize(vec2i newSize)
+	{
+		window = newSize.wh;
+		buffer.Resize(window.size);
+	}
 
 	public IDisposable HideCursor()
 	=> DisposableLock.Lock(
@@ -70,24 +77,27 @@ public partial class WheatConsole : IDisposable
 		});
 	}
 
-	public record class Cursor(int x, int y)
+	public record class Cursor(aabb2i size, vec2i position)
 	{
+		/*
 		public static explicit operator Cursor(vec2i v) => new(v.x, v.y);
 		public static explicit operator Cursor((int Left, int Top) v) => new(v.Left, v.Top);
 		public static implicit operator vec2i(Cursor c) => vec2i.xy(c.x, c.y);
 		public static implicit operator COORD(Cursor v) => new COORD { X = (short)v.x, Y = (short)v.y };
+		*/
 
-		internal Cursor Set(int _x, int _y) => new Cursor(_x, _y).Also(_ => _.Set());
-		internal Cursor Set(vec2i a) => new Cursor(a.x, a.y).Also(_ => _.Set());
+		internal Cursor Set(int _x, int _y) => new Cursor(size, vec2i.xy(_x, _y)).Also(_ => _.Set());
+		internal Cursor Set(vec2i a) => new Cursor(size, a).Also(_ => _.Set());
 
 		internal Cursor Set()
-			=> this.Also(_ => Console.SetCursorPosition(x.Clamp(0, Console.BufferWidth - 1), y.Clamp(0, Console.BufferHeight - 1)));
+			=> this.Also(_ => Console.SetCursorPosition(size.a.x + position.x.Clamp(0, size.size.x), size.a.y + position.y.Clamp(0, size.size.y)));
 
-		internal Cursor Move(int dx) => Set(x + dx, y);
-		internal Cursor Move((int x, int y) d) => Set(x + d.x, y + d.y);
-		internal Cursor Move(vec2i d) => Set(x + d.x, y + d.y);
+		internal Cursor Move(int dx) => Set(position.dX(dx));
+		internal Cursor Move((int x, int y) d) => Set(vec2i.xy(position.x + d.x, position.y + d.y));
+		internal Cursor Move(vec2i d) => Set(position + d);
 	}
-	public void SetCursor(int _x, int _y) => cursor = cursor.Set(window.a.x + _x, window.a.y + _y);
+	public void SetCursor(int _x, int _y) => cursor = new Cursor(window, vec2i.xy(_x, _y));
+	public void SetCursor((int Left, int Top) v) => cursor = new Cursor(window, vec2i.xy(v.Left, v.Top));
 
 
 	public ConsoleKeyInfo ReadKey()
@@ -137,9 +147,9 @@ public partial class WheatConsole : IDisposable
 			var start = cursor;
 			var current = cursor;
 
-			int f_cursor() => current.x - start.x;
+			int f_cursor() => current.position.x - start.position.x;
 			void f_validate_cursor() {
-				if (current.x < start.x) current = current with { x = start.x };
+				if (current.position.x < start.position.x) current = current with { position = vec2i.xy(start.position.x, current.position.y) };
 			};
 			void f_move_cursor(int dx) {
 				current = current.Move(dx);
@@ -203,7 +213,7 @@ public partial class WheatConsole : IDisposable
 
 	internal void ReadRaw(out char c)
 	{
-		c = buffer[readCursor].c;
+		c = buffer[readCursor.position].c;
 #if false
 		using (cursor.Lock(
 			c => Console.SetCursorPosition(readCursor.x, readCursor.y)
@@ -275,25 +285,24 @@ public partial class WheatConsole : IDisposable
 
 	public void Write(ANSIString s) => WriteRaw(s.ToString());
 
+	ANSICharacter currentAnsiState = new ANSICharacter();
 	internal void WriteRaw(char c)
 	{
 		var d = Direction switch {
 			WriteDirection.Right => (1, 0),
 			WriteDirection.Bottom => (0, 1),
 			WriteDirection.Left => (-1, 0),
-			WriteDirection.Top => (0, -1),
+			WriteDirection.Top  => (0, -1),
 		};
 
 		Console.Write(c);
-		buffer[cursor] = new ANSICharacter(c);
+		buffer[cursor.position] = currentAnsiState.dC(c);
 		cursor = cursor.Move(d);
 		readCursor = cursor;
 	}
 	internal void WriteRaw(string s)
 	{
-		var reg = $"{Regex.Escape(ANSI.CSI)}[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]"
-			+ $"|{Regex.Escape(ANSI.ESC)}[\x40-\x5F]";
-		var r = new Regex(reg, RegexOptions.Compiled);
+		var r = new Regex(ANSI.ESCRegex, RegexOptions.Compiled);
 
 		var t = s.tokenize();
 		while (t.find_any(ANSI.ESC[0]))
@@ -306,6 +315,12 @@ public partial class WheatConsole : IDisposable
 			if (m.Success)
 			{
 				t.step(m.Value.Length);
+				var ansi_sequence = t.token;
+				if (ANSICharacter.TryParse(m, out var ac))
+				{
+					currentAnsiState = ac;
+				}
+				Console.WriteLine(ansi_sequence);
 			}
 		}
 
@@ -318,12 +333,11 @@ public partial class WheatConsole : IDisposable
 		WriteRaw(s);
 
 		cursor = Direction switch {
-			WriteDirection.Right => cursor.Set(window.a.x, cursor.y + 1),
-			WriteDirection.Bottom => cursor.Set(window.a.x - 1, window.a.y),
-			WriteDirection.Left => cursor.Set(window.b.x, cursor.y - 1),
-			WriteDirection.Top => cursor.Set(window.a.x + 1, window.b.y),
+			WriteDirection.Right => cursor.Set(0, cursor.position.y + 1),
+			WriteDirection.Bottom => cursor.Set(cursor.position.x - 1, 0),
+			WriteDirection.Left => cursor.Set(cursor.size.size.x - 1, cursor.position.y - 1),
+			WriteDirection.Top => cursor.Set(cursor.position.x + 1, cursor.size.size.y - 1),
 		};
-		cursor.Set();
 
 		if (clearmode)
 		{
@@ -489,9 +503,9 @@ public partial class WheatConsole : IDisposable
 			}
 		});
 
-	public IDisposable Image(WheatImage image) => Image(cursor, image);
+	public IDisposable Image(WheatImage image) => Image(cursor.position, image);
 	public IDisposable Image(vec2i position, WheatImage image)
-		=> Window(position.wh(image.size)).Also(_ => {
+		=> Window(aabb2i.xywh(position, image.size)).Also(_ => {
 			using (DisposableLock.Lock(() => clearmode.Also(_ => clearmode = false), _ => clearmode = _))
 			{
 				foreach (var l in image.lines)

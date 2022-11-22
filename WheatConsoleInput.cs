@@ -49,13 +49,13 @@ internal class WheatConsoleInput
 	}
 
 	static bool Run = false;
-	public static void Start(Action<MouseEvent> mouse = null, Action<KeyEvent> key = null, Action<WindowEvent> window = null)
+	public static void Start(WheatConsole console, Action<MouseEvent> mouse = null, Action<KeyEvent> key = null, Action<WindowEvent> window = null)
 	{
 		Run = true;
 		new Thread(() => {
 			while (true)
 			{
-				ReadInput(
+				ReadInput(console,
 					mouse is not null ? 
 						(MOUSE_EVENT_RECORD m) => { }
 						: null
@@ -70,7 +70,7 @@ internal class WheatConsoleInput
 		}).Start();
 	}
 
-	public static void ReadInput(
+	public static void ReadInput(WheatConsole console,
 		Action<MOUSE_EVENT_RECORD>? mouse = null
 		, Action<KEY_EVENT_RECORD>? key = null
 		, Action<WINDOW_BUFFER_SIZE_RECORD>? window = null)
@@ -89,6 +89,7 @@ internal class WheatConsoleInput
 				key?.Invoke(record[0].KeyEvent);
 				break;
 			case INPUT_RECORD.WINDOW_BUFFER_SIZE_EVENT:
+				console.Resize(record[0].WindowBufferSizeEvent.dwSize);
 				window?.Invoke(record[0].WindowBufferSizeEvent);
 				break;
 		}
