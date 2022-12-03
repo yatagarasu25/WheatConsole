@@ -1,17 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net70</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+	<PropertyGroup>
+		<TargetFramework>net70</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 
-    <EnablePreviewFeatures>true</EnablePreviewFeatures>
-  </PropertyGroup>
+		<EnablePreviewFeatures>true</EnablePreviewFeatures>
+		<LangVersion>preview</LangVersion>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\ANSIConsole\ANSIConsole\ANSIConsole.csproj" />
-    <ProjectReference Include="..\MathEx\MathEx.core.csproj" />
-    <ProjectReference Include="..\SystemEx\SystemEx.csproj" />
-  </ItemGroup>
-
+	<ItemGroup>
+		<ProjectReference Include="..\ANSIConsole\ANSIConsole\ANSIConsole.csproj" />
+		<ProjectReference Include="..\MathEx\MathEx.core.csproj" />
+		<ProjectReference Include="..\SystemEx\SystemEx.csproj" />
+	</ItemGroup>
 </Project>
