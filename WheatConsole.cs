@@ -1,10 +1,12 @@
 ﻿namespace Wheat;
 
+using System.Drawing;
 using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using static Wheat.NativeFunctions;
 
 public partial class WheatConsole : IDisposable
 {
@@ -60,9 +62,9 @@ public partial class WheatConsole : IDisposable
 	}
 
 	public IDisposable HideCursor()
-	=> DisposableLock.Lock(
-		true.Also(_ => { Console.CursorVisible = false; })
-		, _ => Console.CursorVisible = _);
+		=> DisposableLock.Lock(
+			true.Also(_ => { Console.CursorVisible = false; })
+			, _ => Console.CursorVisible = _);
 
 	public IDisposable Paint(ConsoleColor bg, ConsoleColor fg)
 	{

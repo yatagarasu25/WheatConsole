@@ -14,4 +14,8 @@
 		<ProjectReference Include="..\MathEx\MathEx.core.csproj" />
 		<ProjectReference Include="..\SystemEx\SystemEx.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.Runtime.Experimental" Version="6.0.2" />
+	</ItemGroup>
 </Project>
