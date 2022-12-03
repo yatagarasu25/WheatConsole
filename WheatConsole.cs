@@ -41,8 +41,12 @@ public partial class WheatConsole : IDisposable
 
 
 	public WheatConsole()
+<<<<<<< HEAD
 	{
 		Console.OutputEncoding = Encoding.UTF8;
+=======
+	{ 
+>>>>>>> dd7bdfc2973db2486ebf79d55adfafa8ae301c6a
 		ansiMode._ = new ANSIInitializer();
 		window = screen;
 		SetCursor(Console.GetCursorPosition());
@@ -57,7 +61,11 @@ public partial class WheatConsole : IDisposable
 
 	public void Resize(vec2i newSize)
 	{
+<<<<<<< HEAD
 		window = newSize.wh();
+=======
+		window = newSize.wh;
+>>>>>>> dd7bdfc2973db2486ebf79d55adfafa8ae301c6a
 		buffer.Resize(window.size);
 	}
 
@@ -694,4 +702,8 @@ public class BoxDrawing
 
 		return ErrorChar;
 	}
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> dd7bdfc2973db2486ebf79d55adfafa8ae301c6a
