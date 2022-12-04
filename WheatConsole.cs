@@ -1,5 +1,6 @@
 ﻿namespace Wheat;
 
+using ANSIConsole;
 using System.Drawing;
 using System.Globalization;
 using System.Numerics;
@@ -7,6 +8,17 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using static Wheat.NativeFunctions;
+
+public static class WheatConsoleColor
+{
+	public static string bold<T>(T v) => $"\f[{v}\f]";
+
+	public static string color<T>(int fg, T v) => $"\fc*{Convert.ToString(fg, 16)}{v}\f]";
+	public static string color<T>(ConsoleColor fg, T v) => $"\fc*{Convert.ToString((int)fg, 16)}{v}\f]";
+	public static string darkgreen<T>(T v) => color(ConsoleColor.DarkGreen, v);
+	public static string green<T>(T v) => color(ConsoleColor.Green, v);
+	public static string gold(string s) => s.Color(ConsoleColor.Yellow).ToString();
+}
 
 public partial class WheatConsole : IDisposable
 {
@@ -41,12 +53,8 @@ public partial class WheatConsole : IDisposable
 
 
 	public WheatConsole()
-<<<<<<< HEAD
 	{
 		Console.OutputEncoding = Encoding.UTF8;
-=======
-	{ 
->>>>>>> dd7bdfc2973db2486ebf79d55adfafa8ae301c6a
 		ansiMode._ = new ANSIInitializer();
 		window = screen;
 		SetCursor(Console.GetCursorPosition());
@@ -61,11 +69,7 @@ public partial class WheatConsole : IDisposable
 
 	public void Resize(vec2i newSize)
 	{
-<<<<<<< HEAD
 		window = newSize.wh();
-=======
-		window = newSize.wh;
->>>>>>> dd7bdfc2973db2486ebf79d55adfafa8ae301c6a
 		buffer.Resize(window.size);
 	}
 
@@ -330,7 +334,7 @@ public partial class WheatConsole : IDisposable
 				{
 					currentAnsiState = ac;
 				}
-				Console.WriteLine(ansi_sequence);
+				Console.Write(ansi_sequence);
 			}
 		}
 
@@ -401,14 +405,6 @@ public partial class WheatConsole : IDisposable
 		PendingSpaces = 0;
 		EndLine();
 	}
-
-	public string bold<T>(T v) => $"\f[{v}\f]";
-
-	public static string color<T>(int fg, T v) => $"\fc*{Convert.ToString(fg, 16)}{v}\f]";
-	public static string color<T>(ConsoleColor fg, T v) => $"\fc*{Convert.ToString((int)fg, 16)}{v}\f]";
-	public string darkgreen<T>(T v) => color(ConsoleColor.DarkGreen, v);
-	public string green<T>(T v) => color(ConsoleColor.Green, v);
-	public string gold<T>(T v) => color(ConsoleColor.Yellow, v);
 
 
 	bool clearmode = false;
@@ -702,8 +698,4 @@ public class BoxDrawing
 
 		return ErrorChar;
 	}
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> dd7bdfc2973db2486ebf79d55adfafa8ae301c6a
