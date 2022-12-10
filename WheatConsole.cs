@@ -309,7 +309,15 @@ public partial class WheatConsole : IDisposable
 			WriteDirection.Top  => (0, -1),
 		};
 
+		bool autoScroll = true;
+
 		Console.Write(c);
+		if (cursor.position >= buffer.size.wh())
+		{
+			if (autoScroll)
+				buffer.Scroll(cursor.position);
+		}
+		
 		buffer[cursor.position] = currentAnsiState.dC(c);
 		cursor = cursor.Move(d);
 		readCursor = cursor;

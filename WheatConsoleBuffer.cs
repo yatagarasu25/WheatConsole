@@ -3,12 +3,12 @@
 public class WheatConsoleBuffer
 {
 	protected ANSICharacter[] data = Array.Empty<ANSICharacter>();
-	protected vec2i size = vec2i.zero;
+	public vec2i size = vec2i.zero;
 
 
 	public ANSICharacter this[vec2i p] {
 		get => data[p.x + p.y * size.x];
-		set => data[p.x + p.y * size.x] = value;
+		set { if (p < size.wh()) data[p.x + p.y * size.x] = value; }
 	}
 
 
@@ -35,5 +35,23 @@ public class WheatConsoleBuffer
 		}
 
 		size = newSize;
+	}
+
+	internal void Scroll(vec2i position)
+	{
+		var delta = position - size.wh();
+
+		var ex = delta.x > 0 ? Range(0, delta.x) : Range(0, -delta.x);
+		var ey = delta.y > 0 ? Range(0, delta.y) : Range(0, -delta.y);
+
+		if (delta.x == 0)
+		{
+			if (delta.y > 0) {
+				//for (int i )
+			}
+			else if (delta.y < 0)
+			{
+			}
+		}
 	}
 }
