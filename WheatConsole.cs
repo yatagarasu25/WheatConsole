@@ -14,10 +14,10 @@ public static class WheatConsoleColor
 	public static string bold<T>(T v) => $"\f[{v}\f]";
 
 	public static string color<T>(int fg, T v) => $"\fc*{Convert.ToString(fg, 16)}{v}\f]";
-	public static string color<T>(ConsoleColor fg, T v) => $"\fc*{Convert.ToString((int)fg, 16)}{v}\f]";
+	public static string color<T>(this ConsoleColor fg, T v) => $"\fc*{Convert.ToString((int)fg, 16)}{v}\f]";
 	public static string darkgreen<T>(T v) => color(ConsoleColor.DarkGreen, v);
 	public static string green<T>(T v) => color(ConsoleColor.Green, v);
-	public static string gold(string s) => s.Color(ConsoleColor.Yellow).ToString();
+	public static string gold<T>(T v) => color(ConsoleColor.Yellow, v);
 }
 
 public partial class WheatConsole : IDisposable
@@ -367,7 +367,7 @@ public partial class WheatConsole : IDisposable
 			{
 				using (cursor.Lock(c => cursor = c.Set()))
 				{
-					WriteRaw(new string(' ', window.width)); // echoes of the past
+					WriteRaw(new string(' ', window.width - 1)); // echoes of the past
 				}
 			}
 		}
