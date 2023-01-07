@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using static Wheat.NativeFunctions;
+using static Wheat.WheatConsole;
 
 public static class WheatConsoleColor
 {
@@ -20,6 +21,9 @@ public static class WheatConsoleColor
 	public static string gold<T>(T v) => color(ConsoleColor.Yellow, v);
 }
 
+/// <summary>
+/// Wheat console
+/// </summary>
 public partial class WheatConsole : IDisposable
 {
 	enum WriteDirection
@@ -78,6 +82,12 @@ public partial class WheatConsole : IDisposable
 			true.Also(_ => { Console.CursorVisible = false; })
 			, _ => Console.CursorVisible = _);
 
+	/// <summary>
+	/// Switch console output to colored mode.
+	/// </summary>
+	/// <param name="bg">background</param>
+	/// <param name="fg">foreground</param>
+	/// <returns></returns>
 	public IDisposable Paint(ConsoleColor bg, ConsoleColor fg)
 	{
 		var o = (bg: Console.BackgroundColor, fg: Console.ForegroundColor);
@@ -110,6 +120,7 @@ public partial class WheatConsole : IDisposable
 		internal Cursor Move((int x, int y) d) => Set(vec2i.xy(position.x + d.x, position.y + d.y));
 		internal Cursor Move(vec2i d) => Set(position + d);
 	}
+	public Cursor SetCursor(vec2i xy) => new Cursor(window, xy).Also(c => cursor = c).Set();
 	public void SetCursor(int _x, int _y) => cursor = new Cursor(window, vec2i.xy(_x, _y));
 	public void SetCursor((int Left, int Top) v) => cursor = new Cursor(window, vec2i.xy(v.Left, v.Top));
 
@@ -122,6 +133,10 @@ public partial class WheatConsole : IDisposable
 		return Console.ReadKey();
 	}
 
+	/// <summary>
+	/// Ask Y/N question. [yY/nN]
+	/// </summary>
+	/// <returns></returns>
 	public bool Ask()
 	{
 		var str = Console.ReadLine();
@@ -135,6 +150,14 @@ public partial class WheatConsole : IDisposable
 		return false;
 	}
 
+	/// <summary>
+	/// Read value - that is complex shit. All key processing is here. stepping etc.
+	/// </summary>
+	/// <typeparam name="T"></typeparam>
+	/// <param name="value"></param>
+	/// <param name="format"></param>
+	/// <param name="step"></param>
+	/// <returns></returns>
 	public bool ReadValue<T>(ref T value, string format, Func<int, T> step = null)
 		where T : INumber<T>
 	{
@@ -238,6 +261,9 @@ public partial class WheatConsole : IDisposable
 #endif
 	}
 
+	/// <summary>
+	/// Put tab/indentation to input
+	/// </summary>
 	public void Indent()
 	{
 		if (NeedIndent)
@@ -324,6 +350,7 @@ public partial class WheatConsole : IDisposable
 	}
 	internal void WriteRaw(string s)
 	{
+		cursor.Set();
 		var r = new Regex(ANSI.ESCRegex, RegexOptions.Compiled);
 
 		var t = s.tokenize();
@@ -423,14 +450,19 @@ public partial class WheatConsole : IDisposable
 	}
 
 
+	/// <summary>
+	/// Declare new window/virtual screen 
+	/// </summary>
+	/// <param name="newWindow"></param>
+	/// <returns></returns>
 	public IDisposable Window(aabb2i newWindow)
 	{
 		return DisposableLock.Lock(
 			(window, cursor).Also(
 				_ => {
 					window = newWindow;
-					//var cp = window.clamp(cursor);
-					//((Cursor)cp).Set();
+					cursor = new Cursor(window, window.clamp(cursor.position) - window.a);
+					cursor.Set();
 				}),
 				_ => {
 					window = _.window;
@@ -443,6 +475,14 @@ public partial class WheatConsole : IDisposable
 	
 
 
+	/// <summary>
+	/// Draw verical line.
+	/// 
+	/// 
+	/// That branch got stuck on memory allocation for back buffer and creation of line merge algorithm
+	/// </summary>
+	/// <param name="a"></param>
+	/// <param name="b"></param>
 	void DrawVerticalLine(vec2i a, vec2i b)
 	{
 		var lineCh = BoxDrawing.GetChar(new BoxDrawing.Cell { top = BoxDrawing.CellLine.Single, bottom = BoxDrawing.CellLine.Single });
@@ -456,6 +496,7 @@ public partial class WheatConsole : IDisposable
 		}
 	}
 
+	// TODO implement this
 	void DrawBorder(aabb2i rect)
 	{
 		cursor = cursor.Set(rect.a);
@@ -483,15 +524,28 @@ public partial class WheatConsole : IDisposable
 		}
 	}
 
+	/// <summary>
+	/// Decalre Window with Padding from current window
+	/// </summary>
+	/// <param name="padding"></param>
+	/// <returns></returns>
 	public IDisposable Border(aabb2i padding)
 		=> Window(new(window.a + padding.a, window.b - padding.b)).Also(_ => { 
-
+			// TODO ??
 		});
 
+	/// <summary>
+	/// Decalre Window with panel drawn at position
+	/// that shit goes FP. refactor it
+	/// </summary>
+	/// <param name="position"></param>
+	/// <returns></returns>
 	public IDisposable Panel(aabb2i position)
 		=> Window(position).Also(_ => {
 			using (HideCursor())
 			{
+				// это пиздец какйо-то в экран не помещается
+				// use DrawBorder finally
 				cursor = cursor.Set(position.a);
 				using (DisposableLock.Lock(Direction.Also(_ => Direction = WriteDirection.Right), _ => Direction = _))
 				{
@@ -529,6 +583,13 @@ public partial class WheatConsole : IDisposable
 			}
 		});
 
+	/// <summary>
+	/// That is tab/indentation-saving region of input
+	/// TODO whatever that means
+	/// </summary>
+	/// <param name="title"></param>
+	/// <param name="tabs"></param>
+	/// <returns></returns>
 	public IDisposable Section(string title, int tabs = 1)
 	{
 		var oldTabs = Tabs;
